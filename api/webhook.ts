@@ -1,12 +1,11 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { Client } from '@line/bot-sdk';
+import { messagingApi } from '@line/bot-sdk';
 import { neon } from '@neondatabase/serverless';
 
-const lineConfig = {
+// 最新版 SDK の Client 初期化方法
+const client = new messagingApi.MessagingApiClient({
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || '',
-  channelSecret: process.env.LINE_CHANNEL_SECRET || '',
-};
-const client = new Client(lineConfig);
+});
 const sql = neon(process.env.DATABASE_URL || '');
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
