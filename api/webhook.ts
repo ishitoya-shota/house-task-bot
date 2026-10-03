@@ -23,9 +23,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (event.type === 'message' && event.message.type === 'text') {
         const userMessage = event.message.text;
 
-        await client.replyMessage(event.replyToken, {
-          type: 'text',
-          text: `「${userMessage}」を受け取りました！`,
+        await client.replyMessage({
+          replyToken: event.replyToken,
+          messages: [
+            {
+              type: 'text',
+              text: `「${userMessage}」を受け取りました！`,
+            },
+          ],
         });
       }
     }
