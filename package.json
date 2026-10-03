@@ -1,0 +1,22 @@
+{
+  "name": "house-task-bot",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@google/genai": "^2.27.0",
+    "@line/bot-sdk": "^11.3.0",
+    "@neondatabase/serverless": "^1.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "@vercel/node": "^20.0.0",
+    "typescript": "^7.0.2"
+  }
+}
