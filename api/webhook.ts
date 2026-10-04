@@ -1,7 +1,7 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { validateSignature } from '@line/bot-sdk';
 import { getLineClient } from '../lib/line';
-import { parseMessage } from '../services/aiService';
+import { GeminiUnavailableError, parseMessage } from '../services/aiService';
 import { addTask, completeTask, getPendingTasks } from '../services/taskService';
 
 function requiredEnv(name: string): string {
@@ -12,6 +12,23 @@ function requiredEnv(name: string): string {
 
 function taskListText(tasks: { task_name: string }[]): string {
   return tasks.length ? tasks.map((task, index) => `${index + 1}. ${task.task_name}`).join('\n') : '未完了のタスクはありません。';
+}
+
+function getGeminiErrorMessage(error: GeminiUnavailableError): string {
+  switch (error.status) {
+    case 429:
+      return 'Geminiへのアクセスが集中しているか、利用上限に達しています。少し時間を置いて再度お試しください。';
+    case 500:
+      return 'Gemini側で一時的な内部エラーが発生しています。しばらくしてから再度お試しください。';
+    case 502:
+      return 'Geminiとの通信中に一時的なエラーが発生しました。しばらくしてから再度お試しください。';
+    case 503:
+      return 'ごめんなさい、今ねgeminiが混んでいるの。しばらくしてから再度お試しください。';
+    case 504:
+      return 'Geminiからの応答に時間がかかっています。しばらくしてから再度お試しください。';
+    default:
+      return 'Geminiを一時的に利用できません。しばらくしてから再度お試しください。';
+  }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -62,7 +79,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           console.error('Message processing failed:', error);
           await client.replyMessage({
             replyToken: event.replyToken,
-            messages: [{ type: 'text', text: '処理中にエラーが発生しました。しばらくしてから再度お試しください。' }],
+            messages: [{
+              type: 'text',
+              text: error instanceof GeminiUnavailableError
+                ? getGeminiErrorMessage(error)
+                : '処理中にエラーが発生しました。しばらくしてから再度お試しください。',
+            }],
           });
         }
       }

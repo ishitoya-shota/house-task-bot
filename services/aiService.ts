@@ -15,6 +15,28 @@ SELECT、UNKNOWNではtask_nameは空文字にしてください。`;
 
 const validActions: TaskAction[] = ['CREATE', 'DELETE', 'SELECT', 'UNKNOWN'];
 
+export class GeminiUnavailableError extends Error {
+	readonly status: number;
+
+	constructor(model: string, status: number) {
+		super(`Gemini is temporarily unavailable for model "${model}"`);
+		this.name = 'GeminiUnavailableError';
+		this.status = status;
+	}
+}
+
+function getErrorStatus(error: unknown): number | undefined {
+	return (error as { status?: number }).status;
+}
+
+function isRetryableError(error: unknown): boolean {
+	return [429, 500, 502, 503, 504].includes(getErrorStatus(error) || 0);
+}
+
+async function wait(milliseconds: number): Promise<void> {
+	await new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
 function normalizeIntent(value: unknown): ParsedIntent {
 	if (!value || typeof value !== 'object') {
 		throw new Error('Gemini returned a non-object response');
@@ -46,14 +68,40 @@ function normalizeIntent(value: unknown): ParsedIntent {
 }
 
 export async function parseMessage(message: string): Promise<ParsedIntent> {
-	const response = await getGeminiClient().models.generateContent({
-		model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
-		contents: message,
-		config: {
-			systemInstruction: SYSTEM_INSTRUCTION,
-			responseMimeType: 'application/json',
-		},
-	});
+	const configuredModel = process.env.GEMINI_MODEL?.trim();
+	const model = (configuredModel || 'gemini-3.8-flash').replace(/^models\//, '');
+
+	let response;
+	const maxAttempts = 3;
+	for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+		try {
+			response = await getGeminiClient().models.generateContent({
+				model,
+				contents: message,
+				config: {
+					systemInstruction: SYSTEM_INSTRUCTION,
+					responseMimeType: 'application/json',
+				},
+			});
+			break;
+		} catch (error) {
+			const status = getErrorStatus(error);
+			console.error('Gemini generateContent failed:', { model, attempt, status, error });
+
+			if (!isRetryableError(error) || attempt === maxAttempts) {
+				if (isRetryableError(error)) {
+					throw new GeminiUnavailableError(model, status || 503);
+				}
+				throw new Error(`Gemini API request failed for model "${model}"`);
+			}
+
+			await wait(1000 * 2 ** (attempt - 1));
+		}
+	}
+
+	if (!response) {
+		throw new GeminiUnavailableError(model, 503);
+	}
 
 	const text = response.text?.trim();
 	if (!text) {
